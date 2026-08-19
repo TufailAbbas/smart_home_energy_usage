@@ -1,119 +1,61 @@
-import streamlit as st
-import pandas as pd
+from pathlib import Path
+
 import joblib
+import pandas as pd
+from fastapi import FastAPI
+from pydantic import BaseModel
 
-# -----------------------------
-# Load Model
-# -----------------------------
-model = joblib.load("decision_tree_model.pkl")
 
-st.set_page_config(page_title="Smart Home Efficiency Predictor", page_icon="🏠")
+MODEL_PATH = Path(__file__).with_name("decision_tree_model.pkl")
+model = joblib.load(MODEL_PATH)
+app = FastAPI(title="Smart Home Efficiency API")
 
-st.title("🏠 Smart Home Efficiency Prediction")
-st.write("Enter the device details below to predict Smart Home Efficiency.")
 
-# -----------------------------
-# Inputs
-# -----------------------------
+class PredictionInput(BaseModel):
+    usage_hours_per_day: float
+    energy_consumption: float
+    user_preferences: int
+    malfunction_incidents: int
+    device_age_months: int
+    device_type: str
 
-device = st.selectbox(
-    "Device Type",
-    [
-        "Camera",
-        "Lights",
-        "Security System",
-        "Smart Speaker",
-        "Thermostat"
-    ]
-)
 
-usage = st.slider(
-    "Usage Hours Per Day",
-    0.0,
-    24.0,
-    8.0
-)
+@app.get("/")
+def health_check():
+    return {"status": "ok", "service": "smart home efficiency API"}
 
-energy = st.number_input(
-    "Energy Consumption",
-    min_value=0.0,
-    value=50.0
-)
 
-preference = st.selectbox(
-    "User Preference",
-    [0,1]
-)
-
-malfunction = st.slider(
-    "Malfunction Incidents",
-    0,
-    20,
-    0
-)
-
-age = st.slider(
-    "Device Age (Months)",
-    0,
-    120,
-    24
-)
-
-# -----------------------------
-# One-Hot Encoding
-# -----------------------------
-
-lights = 0
-security = 0
-speaker = 0
-thermostat = 0
-
-if device == "Lights":
-    lights = 1
-
-elif device == "Security System":
-    security = 1
-
-elif device == "Smart Speaker":
-    speaker = 1
-
-elif device == "Thermostat":
-    thermostat = 1
-
-# Camera remains all zeros
-
-# -----------------------------
-# Prediction
-# -----------------------------
-
-if st.button("Predict"):
-
-    input_data = pd.DataFrame([[
-        usage,
-        energy,
-        preference,
-        malfunction,
-        age,
-        lights,
-        security,
-        speaker,
-        thermostat
-    ]],
-    columns=[
-        'UsageHoursPerDay',
-        'EnergyConsumption',
-        'UserPreferences',
-        'MalfunctionIncidents',
-        'DeviceAgeMonths',
-        'DeviceType_Lights',
-        'DeviceType_Security System',
-        'DeviceType_Smart Speaker',
-        'DeviceType_Thermostat'
-    ])
-
-    prediction = model.predict(input_data)
-
-    if prediction[0] == 1:
-        st.success("✅ Smart Home is Efficient")
-    else:
-        st.error("❌ Smart Home is Not Efficient")
+@app.post("/predict")
+def predict(data: PredictionInput):
+    device_flags = {
+        "Lights": int(data.device_type == "Lights"),
+        "Security System": int(data.device_type == "Security System"),
+        "Smart Speaker": int(data.device_type == "Smart Speaker"),
+        "Thermostat": int(data.device_type == "Thermostat"),
+    }
+    input_data = pd.DataFrame(
+        [[
+            data.usage_hours_per_day,
+            data.energy_consumption,
+            data.user_preferences,
+            data.malfunction_incidents,
+            data.device_age_months,
+            device_flags["Lights"],
+            device_flags["Security System"],
+            device_flags["Smart Speaker"],
+            device_flags["Thermostat"],
+        ]],
+        columns=[
+            "UsageHoursPerDay",
+            "EnergyConsumption",
+            "UserPreferences",
+            "MalfunctionIncidents",
+            "DeviceAgeMonths",
+            "DeviceType_Lights",
+            "DeviceType_Security System",
+            "DeviceType_Smart Speaker",
+            "DeviceType_Thermostat",
+        ],
+    )
+    prediction = int(model.predict(input_data)[0])
+    return {"prediction": prediction, "efficient": prediction == 1}

@@ -1,4 +1,5 @@
 streamlit
+fastapi
 pandas
 numpy
 scikit-learn

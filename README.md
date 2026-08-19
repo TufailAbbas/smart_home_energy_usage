@@ -150,8 +150,11 @@ pip install -r requirements.txt
 ### Run Application
 
 ```bash
-streamlit run app.py
+streamlit run streamlit_app.py
 ```
+
+Vercel deploys the FastAPI service from `app.py`. Send a `POST` request to
+`/predict` with the fields defined by `PredictionInput`.
 
 ---
 
